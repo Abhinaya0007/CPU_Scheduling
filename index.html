@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .gantt-block { transition: all 0.2s ease; }
+        .gantt-block:hover { transform: translateY(-2px); filter: brightness(1.1); }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 border-b border-slate-700 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <span class="bg-indigo-600 text-xs font-semibold px-2.5 py-1 rounded text-indigo-100">Case Study 07</span>
+                <h1 class="text-3xl font-bold tracking-tight mt-1 text-white">CPU Scheduling Simulator Dashboard</h1>
+                <p class="text-sm text-slate-400 mt-1">Batch B07 | Comparative Performance & Evaluation Workbench</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="loadSampleDataset('galvin_fcfs')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded border border-slate-700 transition">Galvin FCFS</button>
+                <button onclick="loadSampleDataset('galvin_srtf')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded border border-slate-700 transition">Galvin SRTF</button>
+                <button onclick="loadSampleDataset('galvin_priority')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded border border-slate-700 transition">Galvin Priority</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Sidebar / Input Config -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h2 class="text-lg font-semibold text-slate-200 mb-3">Process Input Workload</h2>
+                    <p class="text-xs text-slate-400 mb-3">Format per line: <code class="bg-slate-900 px-1 rounded text-indigo-300">PID Arrival Burst Priority</code></p>
+                    <textarea id="processInput" class="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder="1 0 24 1&#10;2 0 3 1&#10;3 0 3 1"></textarea>
+
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">CS Overhead (ms)</label>
+                            <input type="number" id="csOverhead" value="0.1" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">RR Quantum (ms)</label>
+                            <input type="number" id="rrQuantum" value="4" min="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+
+                    <button onclick="runSimulation()" class="w-full mt-5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition">Run Simulation & Analytics</button>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h2 class="text-lg font-semibold text-slate-200 mb-3">Comparative Verdict</h2>
+                    <div id="verdictBox" class="space-y-3 text-xs text-slate-300">
+                        <p class="text-slate-500">Run a simulation to generate evaluation recommendations.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Display -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h2 class="text-lg font-semibold text-slate-200 mb-4">Comparative Performance Metrics</h2>
+                    <div class="h-64"><canvas id="metricsChart"></canvas></div>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <h2 class="text-lg font-semibold text-slate-200">Gantt Visualizer</h2>
+                        <select id="ganttAlgoSelect" onchange="renderSelectedGantt()" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"></select>
+                    </div>
+                    <div id="ganttContainer" class="overflow-x-auto pb-4 pt-2"></div>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg overflow-x-auto">
+                    <h2 class="text-lg font-semibold text-slate-200 mb-4">Algorithm Comparison Summary Table</h2>
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900/60 uppercase text-slate-400 border-b border-slate-700">
+                            <tr>
+                                <th class="py-2.5 px-3">Algorithm</th>
+                                <th class="py-2.5 px-3">Avg WT (ms)</th>
+                                <th class="py-2.5 px-3">Avg TAT (ms)</th>
+                                <th class="py-2.5 px-3">Avg RT (ms)</th>
+                                <th class="py-2.5 px-3">CPU Util (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summaryTableBody" class="divide-y divide-slate-700/50">
+                            <tr><td colspan="5" class="py-4 text-center text-slate-500">No simulation data available.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sampleDatasets = {
+            galvin_fcfs: "1 0 24 1\n2 0 3 1\n3 0 3 1",
+            galvin_srtf: "1 0 8 1\n2 1 4 1\n3 2 9 1\n4 3 5 1",
+            galvin_priority: "1 0 10 3\n2 0 1 1\n3 0 2 4\n4 0 1 5\n5 0 5 2"
+        };
+
+        let simulationResults = {};
+        let chartInstance = null;
+
+        function loadSampleDataset(key) {
+            document.getElementById('processInput').value = sampleDatasets[key];
+            runSimulation();
+        }
+
+        function parseInput() {
+            const lines = document.getElementById('processInput').value.trim().split('\n');
+            const processes = [];
+            lines.forEach(line => {
+                const parts = line.trim().split(/\s+/).map(Number);
+                if (parts.length >= 3 && !isNaN(parts[0])) {
+                    processes.push({ pid: parts[0], arrival: parts[1], burst: parts[2], priority: parts[3] || 1 });
+                }
+            });
+            return processes;
+        }
+
+        function runSimulation() {
+            const processes = parseInput();
+            if (processes.length === 0) {
+                alert('Please enter valid process input data.');
+                return;
+            }
+
+            const csOverhead = parseFloat(document.getElementById('csOverhead').value) || 0.0;
+            const quantum = parseInt(document.getElementById('rrQuantum').value) || 4;
+
+            simulationResults = {
+                'FCFS': simulateFCFS(processes, csOverhead),
+                'SJF (Non-Preemptive)': simulateSJF(processes, csOverhead),
+                'SRTF (Preemptive)': simulateSRTF(processes, csOverhead),
+                'Priority': simulatePriority(processes, false, csOverhead),
+                'Priority (With Aging)': simulatePriority(processes, true, csOverhead),
+                [`Round Robin (q=${quantum})`]: simulateRR(processes, quantum, csOverhead)
+            };
+
+            updateSummaryTable();
+            updateMetricsChart();
+            populateGanttSelect();
+            renderSelectedGantt();
+            updateVerdict();
+        }
+
+        function simulateFCFS(procs, cs) {
+            let list = JSON.parse(JSON.stringify(procs)).sort((a,b) => a.arrival - b.arrival);
+            let currentTime = 0, gantt = [], totalWT = 0, totalTAT = 0, totalRT = 0, totalBurst = 0;
+            list.forEach(p => {
+                if (currentTime < p.arrival) currentTime = p.arrival;
+                let start = currentTime, wt = start - p.arrival, rt = wt;
+                currentTime += p.burst;
+                let tat = currentTime - p.arrival;
+                totalWT += wt; totalTAT += tat; totalRT += rt; totalBurst += p.burst;
+                gantt.push({ pid: p.pid, start, end: currentTime });
+            });
+            return { avgWT: totalWT/list.length, avgTAT: totalTAT/list.length, avgRT: totalRT/list.length, cpuUtil: (totalBurst/(totalBurst+(gantt.length-1)*cs))*100, gantt };
+        }
+
+        function simulateSJF(procs, cs) {
+            let list = JSON.parse(JSON.stringify(procs)), currentTime = 0, completed = 0, n = list.length, isCompleted = new Array(n).fill(false), gantt = [], totalWT = 0, totalTAT = 0, totalRT = 0, totalBurst = 0;
+            while (completed < n) {
+                let idx = -1, minBurst = Infinity;
+                for (let i = 0; i < n; i++) {
+                    if (!isCompleted[i] && list[i].arrival <= currentTime && list[i].burst < minBurst) { minBurst = list[i].burst; idx = i; }
+                }
+                if (idx === -1) { currentTime++; continue; }
+                let p = list[idx], start = currentTime, wt = start - p.arrival, rt = wt;
+                currentTime += p.burst;
+                let tat = currentTime - p.arrival;
+                totalWT += wt; totalTAT += tat; totalRT += rt; totalBurst += p.burst;
+                gantt.push({ pid: p.pid, start, end: currentTime });
+                isCompleted[idx] = true; completed++;
+            }
+            return { avgWT: totalWT/n, avgTAT: totalTAT/n, avgRT: totalRT/n, cpuUtil: (totalBurst/(totalBurst+(gantt.length-1)*cs))*100, gantt };
+        }
+
+        function simulateSRTF(procs, cs) {
+            let list = JSON.parse(JSON.stringify(procs)).map(p => ({ ...p, remaining: p.burst, start: -1 }));
+            let currentTime = 0, completed = 0, n = list.length, gantt = [], lastPid = -1, totalWT = 0, totalTAT = 0, totalRT = 0, totalBurst = 0;
+            procs.forEach(p => totalBurst += p.burst);
+            while (completed < n) {
+                let idx = -1, minRem = Infinity;
+                for (let i = 0; i < n; i++) {
+                    if (list[i].arrival <= currentTime && list[i].remaining > 0 && list[i].remaining < minRem) { minRem = list[i].remaining; idx = i; }
+                }
+                if (idx === -1) { currentTime++; continue; }
+                let p = list[idx];
+                if (p.start === -1) { p.start = currentTime; totalRT += (currentTime - p.arrival); }
+                if (lastPid !== p.pid) { gantt.push({ pid: p.pid, start: currentTime, end: currentTime + 1 }); lastPid = p.pid; }
+                else { gantt[gantt.length - 1].end++; }
+                p.remaining--; currentTime++;
+                if (p.remaining === 0) { completed++; let tat = currentTime - p.arrival; totalTAT += tat; totalWT += (tat - p.burst); }
+            }
+            return { avgWT: totalWT/n, avgTAT: totalTAT/n, avgRT: totalRT/n, cpuUtil: (totalBurst/(totalBurst+(gantt.length-1)*cs))*100, gantt };
+        }
+
+        function simulatePriority(procs, enableAging, cs) {
+            let list = JSON.parse(JSON.stringify(procs)).map(p => ({ ...p, curPriority: p.priority }));
+            let currentTime = 0, completed = 0, n = list.length, isCompleted = new Array(n).fill(false), gantt = [], totalWT = 0, totalTAT = 0, totalRT = 0, totalBurst = 0;
+            while (completed < n) {
+                let idx = -1, highestPrio = Infinity;
+                for (let i = 0; i < n; i++) {
+                    if (!isCompleted[i] && list[i].arrival <= currentTime && list[i].curPriority < highestPrio) { highestPrio = list[i].curPriority; idx = i; }
+                }
+                if (idx === -1) { currentTime++; continue; }
+                let p = list[idx], start = currentTime, wt = start - p.arrival, rt = wt;
+                currentTime += p.burst;
+                let tat = currentTime - p.arrival;
+                totalWT += wt; totalTAT += tat; totalRT += rt; totalBurst += p.burst;
+                gantt.push({ pid: p.pid, start, end: currentTime });
+                isCompleted[idx] = true; completed++;
+                if (enableAging) {
+                    for (let i = 0; i < n; i++) { if (!isCompleted[i] && list[i].arrival <= currentTime && list[i].curPriority > 0) list[i].curPriority--; }
+                }
+            }
+            return { avgWT: totalWT/n, avgTAT: totalTAT/n, avgRT: totalRT/n, cpuUtil: (totalBurst/(totalBurst+(gantt.length-1)*cs))*100, gantt };
+        }
+
+        function simulateRR(procs, q, cs) {
+            let list = JSON.parse(JSON.stringify(procs)).map(p => ({ ...p, remaining: p.burst, start: -1 }));
+            let currentTime = 0, completed = 0, n = list.length, queue = [], inQueue = new Array(n).fill(false), gantt = [], totalWT = 0, totalTAT = 0, totalRT = 0, totalBurst = 0;
+            procs.forEach(p => totalBurst += p.burst);
+            for (let i = 0; i < n; i++) { if (list[i].arrival === 0) { queue.push(i); inQueue[i] = true; } }
+            while (completed < n) {
+                if (queue.length === 0) {
+                    currentTime++;
+                    for (let i = 0; i < n; i++) { if (list[i].remaining > 0 && !inQueue[i] && list[i].arrival <= currentTime) { queue.push(i); inQueue[i] = true; } }
+                    continue;
+                }
+                let idx = queue.shift(), p = list[idx];
+                if (p.start === -1) { p.start = currentTime; totalRT += (currentTime - p.arrival); }
+                let execTime = Math.min(p.remaining, q), start = currentTime;
+                currentTime += execTime; p.remaining -= execTime;
+                gantt.push({ pid: p.pid, start, end: currentTime });
+                for (let i = 0; i < n; i++) { if (i !== idx && list[i].remaining > 0 && !inQueue[i] && list[i].arrival <= currentTime) { queue.push(i); inQueue[i] = true; } }
+                if (p.remaining > 0) queue.push(idx);
+                else { completed++; let tat = currentTime - p.arrival; totalTAT += tat; totalWT += (tat - p.burst); }
+            }
+            return { avgWT: totalWT/n, avgTAT: totalTAT/n, avgRT: totalRT/n, cpuUtil: (totalBurst/(totalBurst+(gantt.length-1)*cs))*100, gantt };
+        }
+
+        function updateSummaryTable() {
+            const tbody = document.getElementById('summaryTableBody');
+            tbody.innerHTML = '';
+            Object.keys(simulationResults).forEach(algo => {
+                const res = simulationResults[algo];
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/30 transition';
+                tr.innerHTML = `<td class="py-2.5 px-3 font-medium text-slate-200">${algo}</td><td class="py-2.5 px-3 text-slate-300">${res.avgWT.toFixed(2)}</td><td class="py-2.5 px-3 text-slate-300">${res.avgTAT.toFixed(2)}</td><td class="py-2.5 px-3 text-slate-300">${res.avgRT.toFixed(2)}</td><td class="py-2.5 px-3 text-emerald-400 font-semibold">${res.cpuUtil.toFixed(2)}%</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateMetricsChart() {
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            const labels = Object.keys(simulationResults);
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Avg WT (ms)', data: labels.map(l => simulationResults[l].avgWT), backgroundColor: '#38bdf8' },
+                        { label: 'Avg TAT (ms)', data: labels.map(l => simulationResults[l].avgTAT), backgroundColor: '#f87171' },
+                        { label: 'Avg RT (ms)', data: labels.map(l => simulationResults[l].avgRT), backgroundColor: '#4ade80' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8' } } },
+                    scales: { x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#334155' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } }
+                }
+            });
+        }
+
+        function populateGanttSelect() {
+            const select = document.getElementById('ganttAlgoSelect');
+            select.innerHTML = '';
+            Object.keys(simulationResults).forEach(algo => {
+                const opt = document.createElement('option');
+                opt.value = algo; opt.textContent = algo;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderSelectedGantt() {
+            const algo = document.getElementById('ganttAlgoSelect').value;
+            const container = document.getElementById('ganttContainer');
+            if (!algo || !simulationResults[algo]) return;
+            const gantt = simulationResults[algo].gantt;
+            const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'];
+            let html = '<div class="flex items-center gap-1 min-w-max">';
+            gantt.forEach((block) => {
+                const width = Math.max((block.end - block.start) * 20, 45);
+                const color = colors[(block.pid - 1) % colors.length];
+                html += `<div class="gantt-block rounded p-2 text-center text-white shadow" style="width: ${width}px; background-color: ${color}"><div class="text-xs font-bold">P${block.pid}</div><div class="text-[10px] opacity-80">${block.start} - ${block.end}</div></div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function updateVerdict() {
+            const box = document.getElementById('verdictBox');
+            let minWTAlgo = '', minWT = Infinity, minRTAlgo = '', minRT = Infinity;
+            Object.keys(simulationResults).forEach(algo => {
+                const res = simulationResults[algo];
+                if (res.avgWT < minWT) { minWT = res.avgWT; minWTAlgo = algo; }
+                if (res.avgRT < minRT) { minRT = res.avgRT; minRTAlgo = algo; }
+            });
+            box.innerHTML = `<div class="p-3 bg-slate-900/80 rounded-lg border border-slate-700"><p class="font-semibold text-indigo-400">Batch Server Choice:</p><p class="mt-0.5"><strong>${minWTAlgo}</strong> (Min Avg WT: ${minWT.toFixed(2)} ms)</p></div><div class="p-3 bg-slate-900/80 rounded-lg border border-slate-700"><p class="font-semibold text-emerald-400">Interactive Desktop Choice:</p><p class="mt-0.5"><strong>${minRTAlgo}</strong> (Min Avg RT: ${minRT.toFixed(2)} ms)</p></div>`;
+        }
+
+        // Initialize default dataset
+        loadSampleDataset('galvin_fcfs');
+    </script>
+</body>
+</html>
